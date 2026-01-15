@@ -200,7 +200,6 @@ ranks = metagraph.R           # Rank values
 active = metagraph.active     # Activity flags
 last_update = metagraph.last_update  # Last weight update block
 validator_permit = metagraph.validator_permit
-axons = metagraph.axons       # AxonInfo objects
 hotkeys = metagraph.hotkeys   # Hotkey addresses
 coldkeys = metagraph.coldkeys # Coldkey addresses
 
@@ -218,198 +217,11 @@ if hotkey in metagraph.hotkeys:
     uid = metagraph.hotkeys.index(hotkey)
 ```
 
-### Axon
+### Synapse (Deprecated)
 
-Server component for miners.
+> **⚠️ DEPRECATED**: The Synapse/Axon/Dendrite pattern is deprecated. New subnets should use custom HTTP APIs with open source designs. See Document 04 for recommended communication patterns.
 
-```python
-from bittensor import Axon
-
-# Create axon
-axon = Axon(
-    wallet=wallet,
-    port=8091,
-    ip="0.0.0.0"  # External IP (auto-detected if not specified)
-)
-
-# Attach handlers
-axon.attach(
-    forward_fn=my_forward_function,
-    blacklist_fn=my_blacklist_function,  # Optional
-    priority_fn=my_priority_function,    # Optional
-    verify_fn=my_verify_function         # Optional
-)
-
-# Serve on chain (publish endpoint)
-axon.serve(
-    netuid=1,
-    subtensor=subtensor
-)
-
-# Start serving
-axon.start()
-
-# Stop serving
-axon.stop()
-```
-
-#### Forward Function Signature
-
-```python
-def my_forward_function(synapse: MySynapse) -> MySynapse:
-    """
-    Process incoming request.
-    
-    Args:
-        synapse: Incoming request with populated request fields
-        
-    Returns:
-        Same synapse with response fields populated
-    """
-    # Process request
-    result = process(synapse.query)
-    
-    # Set response
-    synapse.response = result
-    
-    return synapse
-```
-
-#### Blacklist Function Signature
-
-```python
-def my_blacklist_function(synapse: MySynapse) -> tuple[bool, str]:
-    """
-    Decide whether to reject request.
-    
-    Args:
-        synapse: Incoming request
-        
-    Returns:
-        (should_blacklist, reason)
-    """
-    caller = synapse.dendrite.hotkey
-    
-    if caller in blocked_list:
-        return True, "Blocked caller"
-    
-    return False, ""
-```
-
-#### Priority Function Signature
-
-```python
-def my_priority_function(synapse: MySynapse) -> float:
-    """
-    Assign priority for request ordering.
-    
-    Args:
-        synapse: Incoming request
-        
-    Returns:
-        Priority value (higher = handled first)
-    """
-    caller = synapse.dendrite.hotkey
-    
-    # Prioritize by stake
-    if caller in metagraph.hotkeys:
-        uid = metagraph.hotkeys.index(caller)
-        return float(metagraph.S[uid])
-    
-    return 0.0
-```
-
-### Dendrite
-
-Client component for validators.
-
-```python
-from bittensor import Dendrite
-
-# Create dendrite
-dendrite = Dendrite(wallet=wallet)
-
-# Single request
-response = await dendrite.forward(
-    axons=[axon_info],
-    synapse=MySynapse(query="test"),
-    timeout=12.0
-)
-
-# Batch request (multiple miners)
-responses = await dendrite.forward(
-    axons=[axon_1, axon_2, axon_3],
-    synapse=MySynapse(query="test"),
-    timeout=12.0
-)
-
-# Streaming (if synapse supports)
-async for chunk in dendrite.stream(
-    axons=[axon_info],
-    synapse=StreamingSynapse(query="test")
-):
-    print(chunk)
-```
-
-### Synapse
-
-Request/response data container.
-
-```python
-from bittensor import Synapse
-from typing import Optional
-from pydantic import Field
-
-class MySynapse(Synapse):
-    """Custom synapse for my subnet"""
-    
-    # Request fields (sent by validator)
-    query: str = Field(
-        ...,
-        description="The query to process",
-        max_length=10000
-    )
-    max_tokens: int = Field(
-        default=100,
-        ge=1,
-        le=4096
-    )
-    
-    # Response fields (set by miner)
-    response: Optional[str] = None
-    confidence: Optional[float] = None
-    
-    class Config:
-        # Required for complex types
-        arbitrary_types_allowed = True
-        
-    def deserialize(self) -> str:
-        """Deserialize response for easy access"""
-        return self.response
-```
-
-#### Built-in Synapse Attributes
-
-Every synapse has these attributes:
-```python
-synapse.name            # Synapse class name
-synapse.timeout         # Request timeout
-synapse.total_size      # Total serialized size
-synapse.header_size     # Header size
-
-# Dendrite info (set by sender)
-synapse.dendrite.hotkey
-synapse.dendrite.ip
-synapse.dendrite.port
-synapse.dendrite.nonce
-synapse.dendrite.signature
-synapse.dendrite.process_time  # Response time
-
-# Axon info (set by receiver)
-synapse.axon.hotkey
-synapse.axon.ip
-synapse.axon.port
-```
+Synapse was the legacy request/response data container used with Axon and Dendrite. For new subnets, use standard HTTP APIs (FastAPI, Flask, etc.) with hotkey-based signing (Epistula protocol).
 
 ---
 
@@ -512,45 +324,52 @@ async def metagraph_sync_loop(metagraph, subtensor, interval: int = 60):
         await asyncio.sleep(interval)
 ```
 
-### Concurrent Miner Queries
+### Concurrent Miner Queries (Recommended Pattern)
 
 ```python
+import aiohttp
+import asyncio
+
 async def query_miners_concurrently(
-    dendrite,
     metagraph,
-    synapse,
+    endpoint: str,
+    payload: dict,
     timeout: float = 12.0,
     max_concurrent: int = 50
-) -> list:
-    """Query miners with concurrency limit"""
-    
-    import asyncio
+) -> dict:
+    """Query miners via HTTP with concurrency limit"""
     
     semaphore = asyncio.Semaphore(max_concurrent)
     
-    async def query_one(axon):
+    async def query_one(uid: int, url: str) -> tuple[int, dict | None]:
         async with semaphore:
             try:
-                return await dendrite.forward(
-                    axons=[axon],
-                    synapse=synapse,
-                    timeout=timeout
-                )
-            except Exception as e:
-                return None
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        url,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=timeout)
+                    ) as resp:
+                        if resp.status == 200:
+                            return uid, await resp.json()
+            except Exception:
+                pass
+            return uid, None
     
-    # Get all serving axons
-    axons = [
-        metagraph.axons[uid] 
-        for uid in range(metagraph.n) 
-        if metagraph.axons[uid].is_serving
-    ]
+    # Build tasks for all registered miners
+    # Miners commit their endpoint URLs to chain metadata
+    tasks = []
+    for uid in range(metagraph.n):
+        hotkey = metagraph.hotkeys[uid]
+        # Get miner's committed endpoint from chain or registry
+        miner_url = get_miner_endpoint(hotkey, endpoint)
+        if miner_url:
+            tasks.append(query_one(uid, miner_url))
     
     # Query concurrently
-    tasks = [query_one(axon) for axon in axons]
     results = await asyncio.gather(*tasks)
     
-    return results
+    return {uid: response for uid, response in results if response}
 ```
 
 ---
@@ -581,6 +400,7 @@ bt.logging.error("Error message")
 
 ```python
 import bittensor as bt
+import argparse
 
 # Access default config
 config = bt.Config()
@@ -589,7 +409,6 @@ config = bt.Config()
 parser = argparse.ArgumentParser()
 bt.Wallet.add_args(parser)
 bt.Subtensor.add_args(parser)
-bt.Axon.add_args(parser)
 
 # Parse
 config = bt.Config(parser)
@@ -597,5 +416,4 @@ config = bt.Config(parser)
 # Access values
 print(config.wallet.name)
 print(config.subtensor.network)
-print(config.axon.port)
 ```

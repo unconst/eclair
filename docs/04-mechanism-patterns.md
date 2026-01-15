@@ -1,6 +1,6 @@
 # Mechanism Architecture Patterns
 
-**This is the most important document for subnet design.** Production subnets use diverse architectures based on their specific needs. The traditional "validator uses dendrite to send synapse to miner axon" pattern is just ONE of many approaches.
+**This is the most important document for subnet design.** Production subnets use diverse architectures based on their specific needs. All production subnets use open source, custom communication patterns—never the deprecated SDK primitives.
 
 ## Understanding Mechanism Design
 
@@ -14,31 +14,32 @@ A subnet mechanism defines:
 
 ## Important: Communication Patterns
 
-### Synapse/Dendrite is Legacy
+### Axon/Dendrite/Synapse is Deprecated
 
-**The Synapse/Dendrite/Axon pattern from the SDK is considered legacy.** While it's still functional and useful for simple cases, most sophisticated production subnets roll their own communication methods.
+**The Axon/Dendrite/Synapse pattern from the SDK is deprecated.** New subnets should always use open source, custom communication methods. This pattern was useful for early prototyping but has significant limitations.
 
-**Why subnets use custom communication:**
-- More flexibility in data formats and protocols
-- Better performance for specific use cases
-- Ability to use any transport (HTTP, WebSocket, gRPC, etc.)
-- Direct integration with existing infrastructure
+**Why you should NOT use Axon/Dendrite:**
+- Proprietary pattern that limits flexibility
+- Poor performance for production use cases
+- Encourages closed-source miner implementations
+- All production subnets have moved to custom communication
+- The pattern obscures what's actually happening in your subnet
+
+**What you should use instead:**
+- Standard HTTP APIs (FastAPI, Flask, etc.)
+- Epistula protocol for hotkey-based signing
+- gRPC, WebSocket, or other open protocols as needed
+- Open source designs that anyone can audit and understand
 
 **What miners can commit to chain:**
 Miners can commit arbitrary information to their on-chain metadata, enabling validators to discover:
-- Database endpoints
-- S3 bucket URLs
 - Custom API endpoints
+- S3 bucket URLs
+- Database endpoints
 - IP addresses for any protocol
 - Any other connection information
 
-**What Synapse/Dendrite still provides:**
-- Convenient message signing tied to hotkeys
-- Built-in nonce/replay protection
-- Easy authentication verification
-- Good for prototyping and simple subnets
-
-**Recommendation:** For new subnets, consider whether the SDK communication primitives fit your needs. If you need custom protocols, plan to implement your own communication layer with hotkey-based signing.
+**Recommendation:** Always use custom HTTP APIs with Epistula signing. Never use Axon/Dendrite for new development.
 
 ---
 
@@ -117,7 +118,7 @@ Based on real production subnets, these are the primary architectural patterns:
 │ └─────────┘ │         │              │
 │             │         │ ┌──────────┐ │
 │ ┌─────────┐ │         │ │ Auction  │ │
-│ │  Axon   │◄├─────────┤ │ Clearing │ │
+│ │HTTP API │◄├─────────┤ │ Clearing │ │
 │ │/cvm EP  │ │  Query  │ └──────────┘ │
 │ └─────────┘ │  Bids   │              │
 │             │         │ ┌──────────┐ │
@@ -132,14 +133,15 @@ Based on real production subnets, these are the primary architectural patterns:
 **Miner Side:**
 - Register hotkey on subnet
 - Run CVM (Confidential Virtual Machine) nodes with real hardware
-- Serve an Axon endpoint (typically `/cvm`) advertising:
+- Serve an HTTP endpoint (typically `/cvm`) advertising:
   - Available resources (GPU type, VRAM, CPU cores)
   - Bid price per unit (e.g., $/GPU/hour)
   - Attestation proofs (remote attestation from TEE)
 - Use signed HTTP headers (Epistula protocol) for authentication
+- Commit endpoint URL to chain for discovery
 
 **Validator Side:**
-- Query all registered miner axons for bids
+- Query all registered miner endpoints for bids
 - Verify hardware attestation (via Tower or similar service)
 - Deduplicate miners (same hardware, different hotkeys)
 - Run auction clearing algorithm:
@@ -200,7 +202,7 @@ def create_epistula_headers(wallet, body: bytes) -> dict:
 │ └─────────┘ │ Verify  │              │
 │             │         │ ┌──────────┐ │
 │ NO PUBLIC   │         │ │ Compute  │ │
-│ AXON!       │         │ │ Billing  │ │
+│ ENDPOINT    │         │ │ Billing  │ │
 │             │         │ └──────────┘ │
 └─────────────┘         │              │
                         │ ┌──────────┐ │
@@ -212,7 +214,7 @@ def create_epistula_headers(wallet, body: bytes) -> dict:
 ### Key Components
 
 **Miner Side:**
-- Register hotkey on subnet (NO axon serve!)
+- Register hotkey on subnet
 - Run Kubernetes-based GPU cluster
 - Add nodes via CLI tool (`chutes-miner add-node`)
 - Each node connects via socket.io to central orchestrator
@@ -227,10 +229,10 @@ def create_epistula_headers(wallet, body: bytes) -> dict:
 - Coldkey deduplication: only highest-scoring hotkey per coldkey kept
 - Normalize scores, quantize to u16 weights
 
-**No Axon Pattern:**
+**Socket.io Pattern:**
 ```python
-# Miner does NOT run Axon server
-# Instead connects to orchestrator via socket.io
+# Miner connects to orchestrator via socket.io
+# No public HTTP endpoint required
 
 import socketio
 
@@ -280,7 +282,7 @@ sio.connect('https://orchestrator.chutes.ai')
 │ │ Index   │ │ Summary │ │ Validate │ │
 │ └─────────┘ │         │ └────┬─────┘ │
 │             │         │      │       │
-│ Axon with   │         │ ┌────▼─────┐ │
+│ HTTP API    │         │ ┌────▼─────┐ │
 │ rate limits │         │ │ Score &  │ │
 │             │         │ │ Weights  │ │
 └─────────────┘         │ └──────────┘ │
@@ -297,7 +299,7 @@ sio.connect('https://orchestrator.chutes.ai')
   - DataLabel (subreddit, topic, etc.)
   - TimeBucket (hourly/daily buckets)
   - Size and count metrics
-- Serve via Axon with endpoints:
+- Serve via HTTP with endpoints:
   - `GetMinerIndex`: Return compressed index
   - `GetDataEntityBucket`: Return actual data for bucket
 

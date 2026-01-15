@@ -81,26 +81,36 @@ btcli stake add --netuid <NETUID> \
 
 **Miner:**
 ```python
-import bittensor as bt
+from fastapi import FastAPI
 from bittensor_wallet import Wallet
+from bittensor import Subtensor
+import uvicorn
 
 wallet = Wallet(name="miner")
-subtensor = bt.Subtensor(network="test")
+subtensor = Subtensor(network="test")
 
-axon = bt.Axon(wallet=wallet, port=8091)
-axon.attach(forward_fn=my_handler)
-axon.serve(netuid=NETUID, subtensor=subtensor)
-axon.start()
+app = FastAPI()
+
+@app.post("/compute")
+async def compute(request: dict):
+    # Verify Epistula signature from validator
+    # Process request and return response
+    return {"result": "processed"}
+
+# Register on subnet
+if not subtensor.is_hotkey_registered(NETUID, wallet.hotkey.ss58_address):
+    subtensor.burned_register(wallet=wallet, netuid=NETUID)
+
+uvicorn.run(app, host="0.0.0.0", port=8091)
 ```
 
 **Validator:**
 ```python
 wallet = Wallet(name="validator")
-subtensor = bt.Subtensor(network="test")
-metagraph = bt.Metagraph(netuid=NETUID, network="test")
-dendrite = bt.Dendrite(wallet=wallet)
+subtensor = Subtensor(network="test")
+metagraph = Metagraph(netuid=NETUID, network="test")
 
-# Run validation loop
+# Run validation loop using HTTP queries to miners
 ```
 
 ### Testnet Validation Checklist
@@ -517,7 +527,7 @@ services:
       # Optional: Persistent storage for validator state
       - validator-data:/app/data
     
-    # If the validator serves an axon, expose the port
+    # If the validator serves an HTTP endpoint, expose the port
     # ports:
     #   - "8091:8091"
     

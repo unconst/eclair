@@ -289,18 +289,26 @@ if is_registered:
 
 Miners must:
 1. Register on subnet
-2. Publish endpoint (if using Axon)
-3. Run serving logic
+2. Commit endpoint info to chain (if applicable)
+3. Run serving logic (HTTP API recommended)
 4. Respond to validator queries
 
-Basic axon setup:
+Basic HTTP API setup:
 ```python
-from bittensor import Axon
+from fastapi import FastAPI
+import uvicorn
 
-axon = Axon(wallet=wallet, port=8091)
-axon.attach(forward_fn=my_handler)
-axon.serve(netuid=netuid, subtensor=subtensor)
-axon.start()
+app = FastAPI()
+
+@app.post("/compute")
+async def compute(request: ComputeRequest):
+    # Verify Epistula signature from validator
+    # Process request
+    # Return response
+    return {"result": process(request.data)}
+
+# Commit your endpoint URL to chain for validator discovery
+uvicorn.run(app, host="0.0.0.0", port=8091)
 ```
 
 ### 5.2 Validator Operations

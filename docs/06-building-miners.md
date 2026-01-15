@@ -12,209 +12,38 @@ Miners are the **producers** in Bittensor subnets. They:
 
 ## Important: Communication Patterns
 
-**The Axon/Dendrite/Synapse pattern is legacy.** While it works and is convenient for simple cases, most sophisticated production subnets implement custom communication methods.
+**The Axon/Dendrite/Synapse pattern is deprecated.** New subnets should always use open source, custom communication methods. This ensures transparency, auditability, and allows miners to implement their solutions using standard tools and frameworks.
 
 **Miners can commit any data to chain:**
-- Database endpoints
-- S3 bucket URLs  
 - Custom API endpoints
+- S3 bucket URLs  
+- Database endpoints
 - IP addresses for any protocol
 
 Validators read this committed data to discover how to communicate with miners. This gives you full flexibility in your communication protocol.
 
-**When to use Axon (Pattern A):**
-- Prototyping and simple subnets
-- When you want built-in hotkey signing
-- When the SDK patterns fit your use case
-
-**When to use custom protocols (Pattern B/C):**
-- Production subnets needing specific performance
-- Complex data transfer requirements
-- Integration with existing infrastructure
+**Recommended approach:**
+- Use standard HTTP frameworks (FastAPI, Flask, etc.)
+- Implement Epistula protocol for hotkey-based authentication
+- Open source your miner for auditability
+- Let the validator specification guide your implementation
 
 ## Miner Architecture Patterns
 
-### Pattern A: Axon-Based HTTP Server
-Legacy pattern using SDK's Axon class. Good for prototyping.
+### Pattern A: Custom HTTP API
+Direct HTTP server with signed headers. **Recommended for all subnets.**
 
-### Pattern B: Custom HTTP API
-Direct HTTP server with signed headers. **Recommended for production.**
-
-### Pattern C: Socket/Orchestrator Connection
+### Pattern B: Socket/Orchestrator Connection
 Connect to central coordinator, no public endpoint.
 
-### Pattern D: External Activity
+### Pattern C: External Activity
 Perform activity on external platforms, no server needed.
 
 ---
 
-## Pattern A: Axon-Based Miner (Legacy)
+## Pattern A: Custom HTTP API Miner
 
-Use when: Prototyping or when the SDK patterns fit your needs.
-
-### Basic Structure
-
-```python
-import bittensor as bt
-from bittensor_wallet import Wallet
-
-class MyMiner:
-    def __init__(self, config):
-        self.config = config
-        self.wallet = Wallet(
-            name=config.wallet_name,
-            hotkey=config.hotkey_name
-        )
-        self.subtensor = bt.Subtensor(network=config.network)
-        self.metagraph = bt.Metagraph(
-            netuid=config.netuid,
-            network=config.network
-        )
-        self.axon = None
-        self.uid = None
-        
-    def setup(self):
-        """Initialize and register"""
-        # Ensure registered
-        self._ensure_registration()
-        
-        # Create axon
-        self.axon = bt.Axon(
-            wallet=self.wallet,
-            port=self.config.port,
-            ip=self.config.ip
-        )
-        
-        # Attach handlers
-        self.axon.attach(
-            forward_fn=self.forward,
-            blacklist_fn=self.blacklist,
-            priority_fn=self.priority
-        )
-        
-        # Publish endpoint on chain
-        self.axon.serve(
-            netuid=self.config.netuid,
-            subtensor=self.subtensor
-        )
-        
-        # Start serving
-        self.axon.start()
-        
-    def _ensure_registration(self):
-        """Register if not already registered"""
-        if not self.subtensor.is_hotkey_registered(
-            netuid=self.config.netuid,
-            hotkey_ss58=self.wallet.hotkey.ss58_address
-        ):
-            self.subtensor.burned_register(
-                wallet=self.wallet,
-                netuid=self.config.netuid
-            )
-        
-        self.uid = self.subtensor.get_uid_for_hotkey_on_subnet(
-            netuid=self.config.netuid,
-            hotkey_ss58=self.wallet.hotkey.ss58_address
-        )
-        
-    def forward(self, synapse: MySynapse) -> MySynapse:
-        """
-        Process incoming request.
-        This is where your actual work happens.
-        """
-        # Validate input
-        if not synapse.query:
-            synapse.response = None
-            return synapse
-            
-        # Do actual work
-        result = self.process_query(synapse.query)
-        
-        # Set response
-        synapse.response = result
-        return synapse
-        
-    def blacklist(self, synapse: MySynapse) -> tuple[bool, str]:
-        """
-        Reject requests from bad actors.
-        Return (should_blacklist, reason)
-        """
-        # Get caller's hotkey
-        caller = synapse.dendrite.hotkey
-        
-        # Check if caller is registered validator
-        self.metagraph.sync(lite=True)
-        
-        try:
-            uid = self.metagraph.hotkeys.index(caller)
-            stake = self.metagraph.S[uid]
-            
-            # Require minimum stake
-            if stake < self.config.min_stake:
-                return True, f"Insufficient stake: {stake}"
-                
-            return False, ""
-            
-        except ValueError:
-            return True, "Not registered on subnet"
-            
-    def priority(self, synapse: MySynapse) -> float:
-        """
-        Prioritize requests by stake.
-        Higher priority = handled first.
-        """
-        caller = synapse.dendrite.hotkey
-        
-        try:
-            uid = self.metagraph.hotkeys.index(caller)
-            return float(self.metagraph.S[uid])
-        except ValueError:
-            return 0.0
-            
-    def process_query(self, query: str) -> str:
-        """Your actual processing logic"""
-        # Implement your service here
-        return f"Processed: {query}"
-        
-    def run(self):
-        """Main loop"""
-        self.setup()
-        
-        while True:
-            # Periodic maintenance
-            self.metagraph.sync(lite=True)
-            time.sleep(60)
-```
-
-### Custom Synapse Definition
-
-```python
-from bittensor import Synapse
-from typing import Optional
-
-class MySynapse(Synapse):
-    """
-    Define the request/response format.
-    Must be shared between miner and validator.
-    """
-    # Request fields (sent by validator)
-    query: str
-    max_tokens: int = 100
-    
-    # Response fields (set by miner)
-    response: Optional[str] = None
-    processing_time: Optional[float] = None
-    
-    class Config:
-        # Required for Pydantic v2
-        arbitrary_types_allowed = True
-```
-
----
-
-## Pattern B: Custom HTTP API Miner
-
-Use when: Need custom HTTP endpoints, use Epistula signing.
+Use when: Building any new subnet (this is the recommended pattern).
 
 ### Basic Structure
 
@@ -317,17 +146,16 @@ if __name__ == "__main__":
     if not subtensor.is_hotkey_registered(MY_NETUID, wallet.hotkey.ss58_address):
         subtensor.burned_register(wallet=wallet, netuid=MY_NETUID)
     
-    # Serve axon info (just for discovery, actual endpoint is custom)
-    from bittensor import Axon
-    axon = Axon(wallet=wallet, port=8091)
-    axon.serve(netuid=MY_NETUID, subtensor=subtensor)
+    # Commit your endpoint URL to chain metadata
+    # Validators will read this to discover how to reach you
+    # (Implementation depends on your subnet's discovery mechanism)
     
     uvicorn.run(app, host="0.0.0.0", port=8091)
 ```
 
 ---
 
-## Pattern C: Orchestrator-Connected Miner
+## Pattern B: Orchestrator-Connected Miner
 
 Use when: No public endpoint needed, jobs routed via central system.
 
@@ -348,7 +176,7 @@ class ChutesStyleMiner:
         
     async def setup(self):
         """Register and connect to orchestrator"""
-        # Register on chain (NO axon serve!)
+        # Register on chain
         if not self.subtensor.is_hotkey_registered(
             self.config.netuid,
             self.wallet.hotkey.ss58_address
@@ -444,7 +272,7 @@ if __name__ == "__main__":
 
 ---
 
-## Pattern D: External Activity Miner
+## Pattern C: External Activity Miner
 
 Use when: Value comes from activity on external platforms.
 
@@ -566,12 +394,12 @@ logger = logging.getLogger(__name__)
 
 def log_request(func):
     @wraps(func)
-    async def wrapper(self, synapse, *args, **kwargs):
+    async def wrapper(request, *args, **kwargs):
         start = time.time()
-        caller = synapse.dendrite.hotkey if synapse.dendrite else "unknown"
+        caller = request.headers.get("X-Epistula-Hotkey", "unknown")
         
         try:
-            result = await func(self, synapse, *args, **kwargs)
+            result = await func(request, *args, **kwargs)
             elapsed = time.time() - start
             
             logger.info(f"Request from {caller[:8]}... completed in {elapsed:.3f}s")
@@ -608,9 +436,9 @@ def get_available_memory():
 
 - [ ] Register hotkey on target subnet
 - [ ] Implement commodity provision logic
-- [ ] Handle request validation
-- [ ] Implement blacklist/priority (if using Axon)
-- [ ] Serve endpoint on-chain (if needed)
+- [ ] Handle request validation and Epistula signature verification
+- [ ] Commit endpoint info to chain (if needed)
 - [ ] Add logging and monitoring
 - [ ] Test with validators locally
+- [ ] Open source your implementation for auditability
 - [ ] Monitor incentive and emissions

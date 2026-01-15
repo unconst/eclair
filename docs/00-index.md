@@ -18,7 +18,7 @@ This guide is designed for LLMs and developers who need to:
 3. **[03-architecture.md](03-architecture.md)** - Chain layer, SDK layer, and communication primitives
 
 ### Subnet Development
-4. **[04-mechanism-patterns.md](04-mechanism-patterns.md)** - **CRITICAL**: Different mechanism architectures used in production (NOT just dendrite/synapse)
+4. **[04-mechanism-patterns.md](04-mechanism-patterns.md)** - **CRITICAL**: Different mechanism architectures used in production (open source HTTP APIs)
 5. **[05-subnet-lifecycle.md](05-subnet-lifecycle.md)** - Creating, activating, and configuring subnets
 6. **[06-building-miners.md](06-building-miners.md)** - Implementing miners across different patterns
 7. **[07-building-validators.md](07-building-validators.md)** - Scoring algorithms and weight setting
@@ -45,15 +45,15 @@ This guide is designed for LLMs and developers who need to:
 
 ### Mechanism Architecture Diversity
 
-**Most production subnets do NOT use the traditional "dendrite queries miner axon with synapse" pattern** as their primary communication model. The Axon/Dendrite/Synapse pattern is **legacy** - useful for prototyping but most sophisticated subnets roll their own communication. Document 04 covers the actual patterns used:
+**The Axon/Dendrite/Synapse pattern is deprecated.** New subnets should always use open source, custom communication methods. Document 04 covers the recommended patterns used in production:
 
-- **HTTP/REST APIs** with signed headers (Targon, Chutes)
+- **HTTP/REST APIs** with Epistula signed headers (Targon, Chutes)
 - **External data sources** validated on-chain (Gittensor, Data Universe)
 - **Compute marketplaces** with attestation (Targon, Chutes)
 - **Forecast/prediction markets** (Synth, Zeus)
 - **Data scraping/indexing** with periodic validation (Data Universe)
 
-Miners can commit any connection info to chain (S3 URLs, database endpoints, custom APIs).
+Miners commit connection info to chain (API endpoints, S3 URLs, database endpoints). Validators read this to discover how to communicate with miners.
 
 ### Sybil Resistance Reality
 

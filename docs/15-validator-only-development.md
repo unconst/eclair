@@ -100,19 +100,19 @@ RESPONSE_SCHEMA = {
 How does the validator find miner endpoints?
 
 ```python
-# Option A: Axon info from chain
-def get_miner_endpoint(metagraph, uid):
-    axon = metagraph.axons[uid]
-    return f"http://{axon.ip}:{axon.port}{MINER_ENDPOINT}"
-
-# Option B: Committed data on chain
+# Option A: Committed data on chain (recommended)
 def get_miner_endpoint(subtensor, netuid, hotkey):
     commitment = subtensor.get_commitment(netuid, hotkey)
     return commitment.get("api_url")
 
-# Option C: External registry
+# Option B: External registry
 def get_miner_endpoint(hotkey):
     return registry.lookup(hotkey)
+
+# Option C: Well-known endpoint pattern
+def get_miner_endpoint(hotkey):
+    # Miners register their URLs in a known format
+    return miner_registry.get(hotkey)
 ```
 
 ### 3. Evaluation Logic
@@ -213,8 +213,10 @@ class Validator:
         self.scores = {}
     
     def get_miner_url(self, uid: int, endpoint: str) -> str:
-        axon = self.metagraph.axons[uid]
-        return f"http://{axon.ip}:{axon.port}{endpoint}"
+        hotkey = self.metagraph.hotkeys[uid]
+        # Get miner's committed endpoint from chain or registry
+        base_url = self.get_committed_endpoint(hotkey)
+        return f"{base_url}{endpoint}" if base_url else None
     
     async def query_miner(self, uid: int, payload: dict) -> dict | None:
         url = self.get_miner_url(uid, COMPUTE_ENDPOINT)
@@ -242,7 +244,8 @@ class Validator:
             
             # Query miners
             for uid in range(self.metagraph.n):
-                if not self.metagraph.axons[uid].is_serving:
+                miner_url = self.get_miner_url(uid, "")
+                if not miner_url:
                     continue
                 
                 payload = {"data": "test_input"}

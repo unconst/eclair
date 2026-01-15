@@ -59,238 +59,31 @@ The validator defines "what is valuable" and miners compete to provide it.
 
 ## Validator Architecture Patterns
 
-### Pattern A: Direct Query Validator (Legacy)
-Query miners directly using dendrite/synapse. Good for prototyping.
+### Pattern A: HTTP API Validator
+Query miners via custom HTTP endpoints. **Recommended for all subnets.**
 
-### Pattern B: HTTP API Validator
-Query miners via custom HTTP endpoints. **Recommended for production.**
-
-### Pattern C: External Data Validator
+### Pattern B: External Data Validator
 Fetch data from external sources, no miner queries.
 
-### Pattern D: Delayed Scoring Validator
+### Pattern C: Delayed Scoring Validator
 Score when ground truth becomes available.
 
 ---
 
 ## Note on Communication Patterns
 
-**Dendrite/Synapse is legacy.** While the examples below show SDK patterns for educational purposes, production subnets typically implement custom communication:
+**The Axon/Dendrite/Synapse pattern is deprecated.** New subnets should always use open source, custom communication methods:
 
-- Miners commit connection info to chain (S3 URLs, API endpoints, etc.)
-- Validators read this info and use custom protocols
-- This provides more flexibility and better performance
-
-The SDK patterns work fine for prototyping and simple subnets, but plan for custom communication if you're building something sophisticated.
-
----
-
-## Pattern A: Direct Query Validator (Legacy)
-
-Use when: Prototyping or simple subnets where SDK patterns fit.
-
-```python
-import bittensor as bt
-from bittensor_wallet import Wallet
-import asyncio
-import time
-
-class DirectQueryValidator:
-    def __init__(self, config):
-        self.config = config
-        self.wallet = Wallet(
-            name=config.wallet_name,
-            hotkey=config.hotkey_name
-        )
-        self.subtensor = bt.Subtensor(network=config.network)
-        self.metagraph = bt.Metagraph(
-            netuid=config.netuid,
-            network=config.network
-        )
-        self.dendrite = bt.Dendrite(wallet=self.wallet)
-        
-        # Score tracking
-        self.scores = {}
-        self.last_weight_block = 0
-        
-    async def run(self):
-        """Main validation loop"""
-        while True:
-            try:
-                # 1. Sync metagraph
-                self.metagraph.sync()
-                
-                # 2. Sample miners
-                miner_uids = self._sample_miners()
-                
-                if miner_uids:
-                    # 3. Query miners
-                    responses = await self._query_miners(miner_uids)
-                    
-                    # 4. Score responses
-                    self._score_responses(miner_uids, responses)
-                
-                # 5. Set weights if ready
-                await self._maybe_set_weights()
-                
-                # 6. Wait for next iteration
-                await asyncio.sleep(self.config.query_interval)
-                
-            except Exception as e:
-                print(f"Validation error: {e}")
-                await asyncio.sleep(10)
-                
-    def _sample_miners(self) -> list[int]:
-        """Select miners to query this iteration"""
-        # Get active miners (not self, not validators without axons)
-        my_uid = self._get_my_uid()
-        
-        available = []
-        for uid in range(self.metagraph.n):
-            if uid == my_uid:
-                continue
-            if not self.metagraph.axons[uid].is_serving:
-                continue
-            available.append(uid)
-        
-        # Sample strategy: mix of random and targeted
-        import random
-        
-        # Always query top performers
-        top_k = 5
-        sorted_by_score = sorted(
-            available,
-            key=lambda u: self.scores.get(u, 0),
-            reverse=True
-        )
-        top_miners = sorted_by_score[:top_k]
-        
-        # Random sample from rest
-        remaining = [u for u in available if u not in top_miners]
-        random_sample = random.sample(
-            remaining,
-            min(self.config.sample_size - top_k, len(remaining))
-        )
-        
-        return top_miners + random_sample
-        
-    async def _query_miners(self, uids: list[int]) -> list:
-        """Query selected miners"""
-        # Build synapse
-        synapse = MySynapse(
-            query=self._generate_query(),
-            max_tokens=100
-        )
-        
-        # Get axon info
-        axons = [self.metagraph.axons[uid] for uid in uids]
-        
-        # Query all miners concurrently
-        responses = await self.dendrite.forward(
-            axons=axons,
-            synapse=synapse,
-            timeout=self.config.timeout
-        )
-        
-        return responses
-        
-    def _score_responses(self, uids: list[int], responses: list):
-        """Score miner responses and update tracking"""
-        for uid, response in zip(uids, responses):
-            if response.response is None:
-                # No response = penalty
-                score = 0.0
-            else:
-                # Apply scoring algorithm
-                score = self._calculate_score(response)
-            
-            # EMA update
-            alpha = self.config.score_alpha
-            old_score = self.scores.get(uid, 0.5)
-            self.scores[uid] = alpha * score + (1 - alpha) * old_score
-            
-    def _calculate_score(self, response) -> float:
-        """
-        Calculate response quality score.
-        This is where your custom logic lives.
-        """
-        score = 0.0
-        
-        # Quality component
-        quality = self._score_quality(response.response)
-        score += self.config.quality_weight * quality
-        
-        # Speed component
-        if response.dendrite.process_time:
-            speed = 1.0 - min(response.dendrite.process_time / self.config.timeout, 1.0)
-            score += self.config.speed_weight * speed
-        
-        return score
-        
-    def _score_quality(self, response_text: str) -> float:
-        """Score response quality (customize for your subnet)"""
-        if not response_text:
-            return 0.0
-        
-        # Example: length-based (replace with real logic)
-        min_len = 10
-        max_len = 500
-        length = len(response_text)
-        
-        if length < min_len:
-            return 0.0
-        if length > max_len:
-            return 0.8  # Too long penalty
-        
-        return 1.0
-        
-    async def _maybe_set_weights(self):
-        """Set weights if rate limit allows"""
-        current_block = self.subtensor.get_current_block()
-        
-        # Check rate limit
-        weights_rate_limit = self.config.weights_rate_limit
-        if current_block - self.last_weight_block < weights_rate_limit:
-            return
-        
-        # Build weight vector
-        uids = list(self.scores.keys())
-        weights = [self.scores[uid] for uid in uids]
-        
-        # Normalize
-        total = sum(weights)
-        if total > 0:
-            weights = [w / total for w in weights]
-        
-        # Submit to chain
-        success = self.subtensor.set_weights(
-            wallet=self.wallet,
-            netuid=self.config.netuid,
-            uids=uids,
-            weights=weights,
-            wait_for_inclusion=True
-        )
-        
-        if success:
-            self.last_weight_block = current_block
-            print(f"Weights set at block {current_block}")
-            
-    def _get_my_uid(self) -> int:
-        """Get our UID on the subnet"""
-        return self.metagraph.hotkeys.index(
-            self.wallet.hotkey.ss58_address
-        )
-        
-    def _generate_query(self) -> str:
-        """Generate query for miners (customize for your subnet)"""
-        return "What is the capital of France?"
-```
+- Miners commit connection info to chain (API endpoints, S3 URLs, etc.)
+- Validators read this info and query via standard HTTP
+- Use Epistula protocol for hotkey-based authentication
+- This provides flexibility, transparency, and better performance
 
 ---
 
-## Pattern B: HTTP API Validator
+## Pattern A: HTTP API Validator
 
-Use when: Miners use custom HTTP endpoints with Epistula signing.
+Use when: Building any new subnet (this is the recommended pattern).
 
 ```python
 import aiohttp
@@ -320,11 +113,11 @@ class HTTPValidator:
             "X-Epistula-Hotkey": self.wallet.hotkey.ss58_address
         }
         
-    async def query_miner(self, axon_info, endpoint: str, payload: dict) -> dict:
+    async def query_miner(self, miner_url: str, endpoint: str, payload: dict) -> dict:
         """Query a miner's HTTP endpoint"""
         import json
         
-        url = f"http://{axon_info.ip}:{axon_info.port}{endpoint}"
+        url = f"{miner_url}{endpoint}"
         body = json.dumps(payload).encode()
         headers = self._create_epistula_headers(body)
         headers["Content-Type"] = "application/json"
@@ -350,10 +143,11 @@ class HTTPValidator:
         # Query all miners for their offerings
         tasks = []
         for uid in range(self.metagraph.n):
-            axon = self.metagraph.axons[uid]
-            if not axon.is_serving:
+            hotkey = self.metagraph.hotkeys[uid]
+            miner_url = self.get_miner_endpoint(hotkey)
+            if not miner_url:
                 continue
-            tasks.append((uid, self.query_miner(axon, "/cvm", {})))
+            tasks.append((uid, self.query_miner(miner_url, "/cvm", {})))
         
         # Gather responses
         responses = {}
@@ -391,9 +185,15 @@ class HTTPValidator:
         return base_score * multiplier
 ```
 
+    def get_miner_endpoint(self, hotkey: str) -> str | None:
+        """Get miner's committed endpoint from chain or registry"""
+        # Implementation depends on your subnet's discovery mechanism
+        # Could read from chain commitments, external registry, etc.
+        pass
+
 ---
 
-## Pattern C: External Data Validator
+## Pattern B: External Data Validator
 
 Use when: Miner value comes from external sources, not direct queries.
 
@@ -508,7 +308,7 @@ class ExternalDataValidator:
 
 ---
 
-## Pattern D: Delayed Scoring Validator
+## Pattern C: Delayed Scoring Validator
 
 Use when: Ground truth arrives after prediction horizon.
 
@@ -525,7 +325,6 @@ class DelayedScoringValidator:
         self.wallet = Wallet(name=config.wallet_name, hotkey=config.hotkey_name)
         self.subtensor = Subtensor(network=config.network)
         self.metagraph = Metagraph(netuid=config.netuid, network=config.network)
-        self.dendrite = bt.Dendrite(wallet=self.wallet)
         
         # Store predictions awaiting scoring
         self.pending_predictions = defaultdict(list)  # uid -> [(prediction, target_time)]
@@ -551,25 +350,24 @@ class DelayedScoringValidator:
         
         # Create prediction request
         target_time = datetime.utcnow() + timedelta(minutes=5)
-        synapse = PredictionSynapse(
-            asset="BTC-USD",
-            horizon=300,
-            target_time=target_time.isoformat()
-        )
+        payload = {
+            "asset": "BTC-USD",
+            "horizon": 300,
+            "target_time": target_time.isoformat()
+        }
         
-        # Query all miners
-        axons = [self.metagraph.axons[uid] for uid in range(self.metagraph.n)]
-        responses = await self.dendrite.forward(
-            axons=axons,
-            synapse=synapse,
-            timeout=30
-        )
-        
-        # Store valid predictions
-        for uid, response in enumerate(responses):
-            if response.prediction is not None:
+        # Query all miners via HTTP
+        for uid in range(self.metagraph.n):
+            hotkey = self.metagraph.hotkeys[uid]
+            miner_url = self.get_miner_endpoint(hotkey)
+            if not miner_url:
+                continue
+                
+            response = await self.query_miner(miner_url, "/predict", payload)
+            
+            if response and response.get("prediction") is not None:
                 self.pending_predictions[uid].append((
-                    response.prediction,
+                    response["prediction"],
                     target_time
                 ))
             else:

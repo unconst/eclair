@@ -21,7 +21,7 @@ The network operates through **subnets** - specialized independent markets that 
 │                     SDK LAYER                           │
 │                    (Python SDK)                         │
 │  - Wraps chain queries and extrinsics                   │
-│  - Provides communication primitives (Axon/Dendrite)    │
+│  - Provides wallet and metagraph management             │
 │  - Manages wallets and metagraph state                  │
 └─────────────────────────────────────────────────────────┘
                            │

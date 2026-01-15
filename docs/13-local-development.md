@@ -214,79 +214,89 @@ btcli stake add --netuid 1 \
 ## Running Local Miner
 
 ```python
-import bittensor as bt
+from fastapi import FastAPI, Request
 from bittensor_wallet import Wallet
+from bittensor import Subtensor
+import uvicorn
 
 # Setup
 wallet = Wallet(name="miner")
-subtensor = bt.Subtensor(network="local")
+subtensor = Subtensor(network="local")
 
-# Create axon
-axon = bt.Axon(wallet=wallet, port=8091)
+app = FastAPI()
 
-# Define handler
-def forward(synapse: MySynapse) -> MySynapse:
-    synapse.response = f"Echo: {synapse.query}"
-    return synapse
+@app.post("/compute")
+async def compute(request: Request):
+    data = await request.json()
+    query = data.get("query", "")
+    return {"response": f"Echo: {query}"}
 
-axon.attach(forward_fn=forward)
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
-# Serve on chain
-axon.serve(netuid=1, subtensor=subtensor)
-
-# Start
-axon.start()
-print("Miner running on port 8091")
-
-# Keep running
-import time
-while True:
-    time.sleep(60)
+if __name__ == "__main__":
+    # Register on subnet
+    if not subtensor.is_hotkey_registered(1, wallet.hotkey.ss58_address):
+        subtensor.burned_register(wallet=wallet, netuid=1)
+    
+    print("Miner running on port 8091")
+    uvicorn.run(app, host="0.0.0.0", port=8091)
 ```
 
 ## Running Local Validator
 
 ```python
-import bittensor as bt
+import aiohttp
 from bittensor_wallet import Wallet
+from bittensor import Subtensor, Metagraph
 import asyncio
 
 # Setup
 wallet = Wallet(name="validator")
-subtensor = bt.Subtensor(network="local")
-metagraph = bt.Metagraph(netuid=1, network="local")
-dendrite = bt.Dendrite(wallet=wallet)
+subtensor = Subtensor(network="local")
+metagraph = Metagraph(netuid=1, network="local")
+
+# For local testing, maintain a simple registry of miner endpoints
+# In production, miners commit their endpoints to chain
+MINER_ENDPOINTS = {}  # hotkey -> url
+
+async def query_miner(url: str, payload: dict) -> dict | None:
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, timeout=12) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+    except Exception:
+        pass
+    return None
 
 async def validate():
     while True:
         # Sync metagraph
         metagraph.sync()
         
-        # Find miners
-        miner_uids = [
-            uid for uid in range(metagraph.n)
-            if metagraph.axons[uid].is_serving
-        ]
+        # Find miners with registered endpoints
+        miner_uids = []
+        for uid in range(metagraph.n):
+            hotkey = metagraph.hotkeys[uid]
+            if hotkey in MINER_ENDPOINTS:
+                miner_uids.append(uid)
         
         if not miner_uids:
             print("No miners found")
             await asyncio.sleep(10)
             continue
         
-        # Query miners
-        synapse = MySynapse(query="test")
-        axons = [metagraph.axons[uid] for uid in miner_uids]
-        
-        responses = await dendrite.forward(
-            axons=axons,
-            synapse=synapse,
-            timeout=12.0
-        )
-        
-        # Score responses
+        # Query miners via HTTP
         scores = {}
-        for uid, response in zip(miner_uids, responses):
-            if response.response:
+        for uid in miner_uids:
+            hotkey = metagraph.hotkeys[uid]
+            url = MINER_ENDPOINTS[hotkey]
+            
+            response = await query_miner(f"{url}/compute", {"query": "test"})
+            
+            if response and response.get("response"):
                 scores[uid] = 1.0
             else:
                 scores[uid] = 0.0
@@ -327,7 +337,6 @@ for uid in range(metagraph.n):
     print(f"  Hotkey: {metagraph.hotkeys[uid][:16]}...")
     print(f"  Stake: {metagraph.S[uid]}")
     print(f"  Incentive: {metagraph.I[uid]}")
-    print(f"  Axon: {metagraph.axons[uid].ip}:{metagraph.axons[uid].port}")
 ```
 
 ### Check Chain State
@@ -434,15 +443,8 @@ async def main():
     subtensor.add_stake(wallet=validator, hotkey_ss58=validator.hotkey.ss58_address, amount=1000)
     print("Staked validator")
     
-    # Start miner
-    axon = bt.Axon(wallet=miner, port=8091)
-    axon.attach(forward_fn=lambda s: setattr(s, 'response', 'ok') or s)
-    axon.serve(netuid=1, subtensor=subtensor)
-    axon.start()
-    print("Miner serving")
-    
-    # Wait for axon to be discoverable
-    await asyncio.sleep(15)
+    # Start miner (in a real test, run this in a separate process)
+    # For this test script, we'll just set weights directly
     
     # Validator sets weights
     metagraph = bt.Metagraph(netuid=1, network="local")
@@ -466,7 +468,6 @@ async def main():
     print(f"Miner incentive: {metagraph.I[miner_uid]}")
     print(f"Miner emission: {metagraph.E[miner_uid]}")
     
-    axon.stop()
     print("Test complete!")
 
 if __name__ == "__main__":

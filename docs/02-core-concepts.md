@@ -68,7 +68,7 @@ A Bittensor wallet consists of two key pairs:
   - Registering on subnets
   - Setting weights (validators)
   - Signing requests (miners/validators)
-  - Running Axon/Dendrite operations
+  - Signing requests and responses
 - Can be kept on servers running neurons
 - Associated with a controlling coldkey
 - SS58 encoded address
@@ -189,7 +189,7 @@ The metagraph is a data structure containing the complete state of a subnet:
 - `last_update`: Last weight update block
 - `validator_permit`: Validator status
 - `validator_trust`: Validator trust scores
-- `axons`: Network endpoint information
+- `hotkeys`: Hotkey addresses
 
 ### Matrices (Full Mode Only)
 - **Weight Matrix (W)**: W[i][j] = weight set by neuron i on neuron j

@@ -65,7 +65,7 @@ The Python SDK abstracts blockchain complexity:
 - Wraps substrate RPC calls
 - Manages key signing
 - Provides high-level objects (Subtensor, Metagraph, Wallet)
-- Implements communication primitives (Axon, Dendrite, Synapse)
+- Provides wallet and metagraph management
 
 ### Core Objects
 
@@ -115,120 +115,62 @@ metagraph.sync()
 # Access neuron data
 stakes = metagraph.S
 incentives = metagraph.I
-axons = metagraph.axons
-```
-
-### Communication Primitives
-
-#### Axon
-Server component run by miners:
-```python
-from bittensor import Axon
-
-axon = Axon(wallet=wallet, port=8091)
-axon.attach(forward_fn=my_handler)
-axon.start()
-```
-
-Features:
-- FastAPI-based HTTP server
-- Request/response signing
-- Blacklist and priority middleware
-- On-chain endpoint publication
-
-#### Dendrite
-Client component used by validators:
-```python
-from bittensor import Dendrite
-
-dendrite = Dendrite(wallet=wallet)
-response = await dendrite.forward(
-    axons=[axon_info],
-    synapse=MySynapse(query="test"),
-    timeout=12.0
-)
-```
-
-Features:
-- Async HTTP client
-- Request signing
-- Batch requests
-- Streaming support
-
-#### Synapse
-Typed request/response container:
-```python
-from bittensor import Synapse
-
-class MySynapse(Synapse):
-    query: str
-    response: Optional[str] = None
+hotkeys = metagraph.hotkeys
 ```
 
 ## Communication Protocol
 
-### ⚠️ SDK Communication Primitives are Legacy
+### ⚠️ SDK Communication Primitives are Deprecated
 
-**The Axon/Dendrite/Synapse pattern is considered legacy.** While functional and useful for prototyping, most sophisticated production subnets implement custom communication methods.
+**The Axon/Dendrite/Synapse pattern is deprecated.** New subnets should always use open source, custom communication methods. The SDK primitives were useful for early prototyping but have significant limitations and should not be used for new development.
 
-**Why subnets move away from SDK primitives:**
-- More flexibility in protocols and data formats
-- Better performance for specific use cases
-- Integration with existing infrastructure
+**Why Axon/Dendrite should NOT be used:**
+- Proprietary pattern that limits flexibility
+- Poor performance for production use cases
+- Encourages closed-source miner implementations
 - Custom requirements not covered by SDK
+- Production subnets universally roll their own communication
+
+**What you should use instead:**
+- Standard HTTP APIs (FastAPI, Flask, etc.)
+- Epistula protocol for hotkey-based signing
+- gRPC, WebSocket, or other open protocols as needed
+- Miners commit connection info to chain metadata
 
 **What miners can commit to chain:**
 Miners can store arbitrary connection information in their on-chain metadata:
-- Database endpoints
+- Custom API endpoints
 - S3 bucket URLs
-- Custom API endpoints  
+- Database endpoints  
 - IP addresses for any protocol
 - Any other discovery information
 
 Validators read this committed data to know how to communicate with each miner.
 
-**What SDK primitives still provide:**
-- Convenient hotkey-based message signing
-- Built-in nonce/replay protection
-- Easy signature verification
-- Good for prototyping and simple subnets
+### Recommended: Epistula Signed HTTP
+The standard pattern for validator-miner communication:
 
-### Request Flow (Legacy SDK Pattern)
+```python
+import time
+import hashlib
+
+def create_epistula_headers(wallet, body: bytes) -> dict:
+    """Create signed HTTP headers for authenticated requests"""
+    nonce = str(int(time.time() * 1e9))
+    body_hash = hashlib.sha256(body).hexdigest()
+    message = f"{nonce}.{body_hash}"
+    signature = wallet.hotkey.sign(message.encode()).hex()
+    
+    return {
+        "X-Epistula-Timestamp": nonce,
+        "X-Epistula-Signature": signature,
+        "X-Epistula-Hotkey": wallet.hotkey.ss58_address
+    }
 ```
-Validator                    Miner
-    │                          │
-    │   1. Create Synapse      │
-    │                          │
-    │   2. Sign with Hotkey    │
-    │                          │
-    │   3. HTTP POST ──────────│
-    │                          │
-    │   4. Verify Signature    │
-    │                          │
-    │   5. Process Request     │
-    │                          │
-    │   6. Sign Response       │
-    │                          │
-    │   ──────────────────────>│
-    │   7. Verify Response     │
-    │                          │
-```
-
-### Signature Model (When Using SDK)
-All requests are cryptographically signed:
-
-Request includes:
-- `bt_header_axon_hotkey`: Receiving miner's hotkey
-- `bt_header_dendrite_hotkey`: Sending validator's hotkey
-- `bt_header_dendrite_nonce`: Unique request nonce
-- `bt_header_dendrite_signature`: Signature over headers
-
-Response includes:
-- `bt_header_axon_signature`: Miner's response signature
 
 ### Production Communication Patterns
-**Most production subnets use custom communication.** See Document 04 for:
-- HTTP APIs with Epistula headers (custom signing)
+**All production subnets use custom communication.** See Document 04 for:
+- HTTP APIs with Epistula headers (recommended)
 - External data source verification
 - Socket.io connections
 - Custom RPC protocols
@@ -239,7 +181,7 @@ Response includes:
 ### Replay Protection
 - Nonces prevent request replay
 - Each request has unique timestamp + random component
-- Axons track seen nonces
+- Servers should track seen nonces to prevent replay attacks
 
 ### Spoofing Prevention
 - Hotkey signatures verify sender identity
