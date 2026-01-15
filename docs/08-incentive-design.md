@@ -745,7 +745,194 @@ This removes validators from the trust equation for core scoring logic.
 
 ---
 
+## Open Source vs Black Box Subnet Design
+
+**Always prefer open source subnet designs where miners commit their agents to the chain.**
+
+This is one of the most important mechanism design choices you'll make. There are two fundamental approaches:
+
+### Black Box Query Design (Avoid)
+
+Miners run hidden endpoints that validators query. The miner's implementation is opaque.
+
+```
+┌─────────────┐         ┌──────────────┐
+│  VALIDATOR  │ Query   │    MINER     │
+│             │────────►│              │
+│             │         │  ┌────────┐  │
+│             │◄────────│  │ ????   │  │
+│             │ Response│  │ Hidden │  │
+│             │         │  └────────┘  │
+└─────────────┘         └──────────────┘
+```
+
+**Problems with black box design:**
+- **Steep learning curve**: New miners have no idea what's working. They must reverse-engineer from scratch.
+- **Stagnation**: No knowledge sharing means the subnet improves slowly.
+- **Unconstrained cheating**: Miners can do anything behind the endpoint — the attack surface is unbounded.
+- **Gaming through obscurity**: Miners optimize for gaming the eval, not providing value.
+
+### Open Source Commit-to-Chain Design (Preferred)
+
+Miners commit their implementations publicly — GitHub repos, Docker images, models on Chutes or HuggingFace. Validators verify using these committed artifacts.
+
+```
+┌─────────────┐         ┌──────────────────────────────────┐
+│  VALIDATOR  │         │         PUBLIC CHAIN             │
+│             │ Read    │                                  │
+│             │────────►│  Miner A: github.com/alice/agent │
+│             │         │  Miner B: hf.co/bob/model        │
+│             │         │  Miner C: chutes.ai/carol/app    │
+│             │         │                                  │
+│   Verify    │         └──────────────────────────────────┘
+│   against   │                       │
+│   committed │◄──────────────────────┘
+│   code/model│
+└─────────────┘
+```
+
+**What miners can commit:**
+- **GitHub repos**: Full source code, auditable and forkable
+- **Docker images**: Reproducible environments with pinned dependencies  
+- **Models on HuggingFace**: Weights, configs, and training details
+- **Endpoints on Chutes**: Verifiable GPU inference with attestation
+- **IPFS hashes**: Immutable content addressing
+
+### Why Open Source Design Is Better
+
+**1. New miners can learn from leaders**
+
+When a miner joins an open source subnet, they can:
+- Study what top performers are doing
+- Fork and improve existing solutions
+- Understand what "good" looks like immediately
+
+This dramatically lowers the barrier to entry and creates a healthier competitive ecosystem.
+
+**2. The subnet improves over time (compounding innovation)**
+
+Open source creates a flywheel:
+```
+Top miner publishes approach
+       ↓
+Others study and improve it
+       ↓
+Improvements get published
+       ↓
+Original miner learns from improvements
+       ↓
+Everyone gets better → subnet output quality increases
+```
+
+In black box subnets, each miner reinvents the wheel. In open source subnets, miners stand on each other's shoulders.
+
+**3. Constrained attack surface**
+
+When miners must commit their code/models publicly:
+- **Validators can audit** — suspicious behavior is visible
+- **Limited degrees of freedom** — miners can only do what their committed code does
+- **Community policing** — other miners will spot and call out gaming
+- **Reproducibility** — validators can verify outputs match committed implementations
+
+With black box endpoints, miners can:
+- Return different outputs to different validators
+- Detect and game evaluation patterns
+- Run completely different code than they claim
+- Implement any attack without visibility
+
+**4. Transparency breeds trust**
+
+Open source subnets are more attractive to:
+- **Miners**: They can see it's a fair playing field
+- **Validators**: They can verify mechanism integrity
+- **Users**: They can trust the subnet's outputs
+- **Token holders**: They can evaluate the subnet's value
+
+### Implementation Patterns
+
+**GitHub-based commitment:**
+```python
+# Miner commits repo URL to chain metadata
+# Validator clones and verifies
+
+async def verify_miner_implementation(miner_uid: int):
+    repo_url = await get_miner_metadata(miner_uid, "github_repo")
+    commit_hash = await get_miner_metadata(miner_uid, "commit_hash")
+    
+    # Clone specific commit
+    repo = clone_repo(repo_url, commit_hash)
+    
+    # Run in sandboxed environment
+    result = await run_sandboxed(repo, test_input)
+    
+    # Verify output matches what miner's endpoint returns
+    endpoint_result = await query_miner_endpoint(miner_uid, test_input)
+    
+    return results_match(result, endpoint_result)
+```
+
+**Model-based commitment (HuggingFace/Chutes):**
+```python
+# Miner commits model identifier
+# Validator runs inference on committed model
+
+async def verify_miner_model(miner_uid: int):
+    model_id = await get_miner_metadata(miner_uid, "hf_model_id")
+    
+    # Load committed model
+    model = load_model_from_hf(model_id)
+    
+    # Run evaluation
+    score = evaluate_model(model, eval_dataset)
+    
+    return score
+```
+
+**Docker-based commitment:**
+```python
+# Miner commits Docker image hash
+# Validator runs exact same container
+
+async def verify_miner_container(miner_uid: int):
+    image_hash = await get_miner_metadata(miner_uid, "docker_image")
+    
+    # Pull and verify hash
+    container = pull_image(image_hash)
+    
+    # Run deterministically
+    result = await run_container(container, test_input)
+    
+    return score_result(result)
+```
+
+### When Black Box Might Be Acceptable
+
+There are limited cases where query-based black box design is reasonable:
+
+1. **Anonymity is explicitly part of the value proposition** — e.g., Red Team generators in adversarial subnets where the output is directly tested anyway
+
+2. **The commodity is purely the endpoint itself** — e.g., compute marketplaces where you're just verifying hardware, not implementation quality
+
+3. **Transition period** — starting black box while developing open source verification infrastructure
+
+Even in these cases, consider hybrid approaches where the core logic is open but execution details are private.
+
+### Migration Strategy
+
+If you have an existing black box subnet:
+
+1. **Start with optional disclosure** — reward miners who commit their code with a scoring bonus
+2. **Build verification infrastructure** — create the tooling to validate committed implementations
+3. **Increase disclosure requirements** — gradually require more transparency for full rewards
+4. **Sunset black box** — eventually require full commitment for any rewards
+
+---
+
 ## Checklist for New Mechanisms
+
+### Subnet Architecture
+- [ ] **Open source design preferred** — miners commit code/models to chain (GitHub, HuggingFace, Chutes, Docker) rather than hiding behind black box endpoints
+- [ ] If using black box endpoints, documented why it's necessary for this specific case
 
 ### Ground Truth & Trust
 - [ ] **Identified source of ground truth** — who/what determines correct answers?
