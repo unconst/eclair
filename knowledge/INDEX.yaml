@@ -38,7 +38,7 @@ files_by_category:
   integrations:
     chutes.integration.yaml: "SN64 LLM inference API"
     basilica.containers.yaml: "container execution for agent subnets"
-    hippius.integration.yaml: "SN13 decentralized storage, S3/IPFS, provenance"
+    hippius.integration.yaml: "SN75 decentralized storage, S3/IPFS, provenance"
     sdk.quick_reference.yaml: "Python SDK patterns, token trading"
     btcli.reference.yaml: "CLI command reference"
     local.development.yaml: "local subtensor setup"
