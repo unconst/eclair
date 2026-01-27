@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="voibes.jpeg" alt="voibes">
+  <img src="SigmaZero.png" alt="sigmazero">
 </p>
 
 # Sigma Zero

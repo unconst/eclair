@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                     SUBNET 120 - PORTFOLIO ALLOCATION VALIDATOR              ║
+║                     SIGMA ZERO - CENTRAL BANKER AGENT VALIDATOR              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
 ║  MECHANISM OVERVIEW                                                          ║
@@ -49,7 +49,7 @@ import os
 import math
 import asyncio
 import aiohttp
-import af_env
+import affinetes as af
 import bittensor as bt
 from typing import Dict, List
 from datetime import datetime, timedelta
@@ -165,12 +165,12 @@ async def run_container(hotkey: str, image: str) -> Dict[str, float]:
     """
     env = None
     try:
-        env = af_env.load_env(
+        env = af.load_env(
             mode="basilica",
             image=image,
             env_vars={"CHUTES_API_KEY": CHUTES_API_KEY, "ASSETS": ",".join(ASSETS)}
         )
-        result = await asyncio.wait_for(env.get_allocation(assets=ASSETS), timeout=30)
+        result = await env.get_allocation(assets=ASSETS, _timeout=30)
         return result
     except Exception as e:
         log(f"Container failed for {hotkey[:6]}: {e}", "error")
@@ -189,7 +189,7 @@ async def run_container(hotkey: str, image: str) -> Dict[str, float]:
 # ║  3. Collect allocations into HISTORY[block]                                ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-async def runner(subtensor: bt.AsyncSubtensor, block: int) -> Dict[str, Dict]:
+async def runner(subtensor: bt.AsyncSubtensor, block: int, max_concurrent: int = 16) -> Dict[str, Dict]:
     """
     Run all miner containers in parallel and collect their allocations.
     
@@ -200,15 +200,17 @@ async def runner(subtensor: bt.AsyncSubtensor, block: int) -> Dict[str, Dict]:
     
     # Initialize state for this block
     HISTORY[block] = {'miners': {}, 'allocations': {}, 'scores': {}, 'stats': {}, 'leader': None}
+    semaphore = asyncio.Semaphore(max_concurrent)
     
     async def process_miner(hotkey, commit_data):
-        commit_block, docker_image = commit_data[-1]
-        HISTORY[block]['miners'][hotkey] = {'block': commit_block, 'image': docker_image}
-        allocation = await run_container(hotkey, docker_image)
-        HISTORY[block]['allocations'][hotkey] = allocation
-        return hotkey, allocation
+        async with semaphore:
+            commit_block, docker_image = commit_data[-1]
+            HISTORY[block]['miners'][hotkey] = {'block': commit_block, 'image': docker_image}
+            allocation = await run_container(hotkey, docker_image)
+            HISTORY[block]['allocations'][hotkey] = allocation
+            return hotkey, allocation
     
-    # Execute all containers concurrently
+    # Execute all containers concurrently (limited by semaphore)
     tasks = [process_miner(hk, cd) for hk, cd in commits.items()]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     log(f"[{block}] Ran {len([r for r in results if not isinstance(r, Exception)])} miner containers", 'info')
