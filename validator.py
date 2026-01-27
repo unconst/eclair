@@ -67,6 +67,11 @@ TWELVE_API_KEY = os.environ.get("TWELVE_DATA_API_KEY")
 TWELVE_BASE_URL = "https://api.twelvedata.com/time_series"
 CHUTES_API_KEY = os.environ.get("CHUTES_API_KEY")
 
+# Wallet/Network configuration (from environment)
+WALLET_NAME = os.environ.get("WALLET_NAME", "default")
+HOTKEY_NAME = os.environ.get("HOTKEY_NAME", "default")
+NETWORK = os.environ.get("NETWORK", "finney")
+
 # In-memory state: {block: {miners, allocations, scores, stats, leader}}
 HISTORY = {}
 
@@ -372,8 +377,9 @@ async def step(subtensor: bt.AsyncSubtensor, wallet: bt.Wallet):
 
 async def main():
     """Initialize connections and run the validator loop forever."""
-    subtensor = bt.AsyncSubtensor()
-    wallet = bt.Wallet()
+    subtensor = bt.AsyncSubtensor(network=NETWORK)
+    wallet = bt.Wallet(name=WALLET_NAME, hotkey=HOTKEY_NAME)
+    log(f"Starting validator: wallet={WALLET_NAME}/{HOTKEY_NAME} network={NETWORK}", "start")
     while True:
         await step(subtensor, wallet)
 

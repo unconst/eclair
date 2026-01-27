@@ -1,4 +1,4 @@
-# Chi Subnet - Docker Build and Push
+# SigmaZero Subnet - Docker Build and Push
 #
 # This workflow builds and pushes the Docker image to Docker Hub
 # whenever code is pushed to the main branch.

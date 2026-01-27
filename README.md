@@ -2,9 +2,16 @@
   <img src="voibes.jpeg" alt="voibes">
 </p>
 
-# Chi: A Vibe-Codable Bittensor Subnet Template.
+# Sigma Zero
 
-1. Clone this repo into Cursor
-2. Ask your agent: "How do I make: [your subnet idea]? @knowledge"
+Incentives for the production of zero volatility agents: "central banker agents", or "stable coin agents", that seek to produce allocations across assets which produce no return, negative or positive. 
 
-Made by Const <3
+# How to use
+
+This subnet only includes a 300-ish line validator.py. Miners should read it to understand where to start and or clone this repo and ask cursor @knowledge. Validators need only run the following after setting up their `.env`.
+
+```bash
+docker compose up --force-recreate --remove-orphans
+``` 
+
+
