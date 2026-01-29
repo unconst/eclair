@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { HeroSection } from '@/sections/HeroSection';
-import { Studio } from '@/components/Studio';
 import './App.css';
 
 function App() {
@@ -8,8 +7,11 @@ function App() {
 
   return (
     <main className="min-h-screen bg-eclair-bg">
-      <HeroSection onStudioClick={() => setIsStudioOpen(true)} />
-      <Studio isOpen={isStudioOpen} onClose={() => setIsStudioOpen(false)} />
+      <HeroSection 
+        isStudioOpen={isStudioOpen}
+        onStudioClick={() => setIsStudioOpen(true)} 
+        onStudioClose={() => setIsStudioOpen(false)}
+      />
     </main>
   );
 }

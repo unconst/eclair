@@ -8,11 +8,18 @@ interface AnimatedHeadlineProps {
 }
 
 export function AnimatedHeadline({ phrases, className = '', interval = 4000 }: AnimatedHeadlineProps) {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(() => Math.floor(Math.random() * phrases.length));
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % phrases.length);
+      setCurrentIndex((prev) => {
+        // Pick a random index different from the current one
+        let next = Math.floor(Math.random() * phrases.length);
+        while (next === prev && phrases.length > 1) {
+          next = Math.floor(Math.random() * phrases.length);
+        }
+        return next;
+      });
     }, interval);
 
     return () => clearInterval(timer);

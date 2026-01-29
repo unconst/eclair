@@ -1,16 +1,19 @@
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { StaggeredLogo } from '@/components/StaggeredLogo';
 import { VerticalText } from '@/components/VerticalText';
 import { AnimatedHeadline } from '@/components/AnimatedHeadline';
 import { InfoBlock } from '@/components/InfoBlock';
 import { NavLink } from '@/components/NavLink';
+import { StudioInput } from '@/components/StudioInput';
 import { fadeIn } from '@/lib/animations';
 
 interface HeroSectionProps {
+  isStudioOpen: boolean;
   onStudioClick: () => void;
+  onStudioClose: () => void;
 }
 
-export function HeroSection({ onStudioClick }: HeroSectionProps) {
+export function HeroSection({ isStudioOpen, onStudioClick, onStudioClose }: HeroSectionProps) {
   return (
     <section className="min-h-screen w-full bg-eclair-bg relative overflow-hidden">
       {/* Main Content Container */}
@@ -22,7 +25,7 @@ export function HeroSection({ onStudioClick }: HeroSectionProps) {
         </div>
 
         {/* Hero Content - Left aligned */}
-        <div className="flex-1 flex flex-col justify-center mt-8 md:mt-16 lg:mt-24 max-w-5xl">
+        <div className="flex-1 flex flex-col justify-center mt-8 md:mt-16 lg:mt-24 max-w-5xl relative">
           {/* Subtitle */}
           <motion.p
             className="text-eclair-text text-base md:text-lg font-normal mb-6 md:mb-8"
@@ -34,17 +37,55 @@ export function HeroSection({ onStudioClick }: HeroSectionProps) {
             Bittensor AI Video Generation
           </motion.p>
 
-          {/* Main Headline */}
-          <AnimatedHeadline 
-            phrases={[
-              "Where imagination becomes motion.",
-              "Where skill becomes production.",
-              "Video by the people.",
-              "Decentralized Motion Studio."
-            ]}
-            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl"
-            interval={4000}
-          />
+          {/* Main Headline or Studio */}
+          <AnimatePresence mode="wait">
+            {isStudioOpen ? (
+              <StudioInput key="studio" onClose={onStudioClose} />
+            ) : (
+              <motion.div
+                key="headline"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <AnimatedHeadline 
+                  phrases={[
+                    "Video models owned by everyone.",
+                    "AI video, without gatekeepers.",
+                    "Decentralized video creation.",
+                    "AI for the people.",
+                    "Open video intelligence.",
+                    "Permissionless creativity at scale.",
+                    "Innovation without permission.",
+                    "No labs. No licenses. No kings.",
+                    "Build intelligence outside the fortress.",
+                    "Progress shouldn't need approval.",
+                    "The future of video shouldn't belong to five companies.",
+                    "Escape centralized AI.",
+                    "Built by the network.",
+                    "Owned by its builders.",
+                    "Trained by the many, not the few.",
+                    "Video models as public infrastructure.",
+                    "Collectively trained. Publicly owned.",
+                    "From the crowd, not the corporation.",
+                    "When intelligence centralizes, progress stalls.",
+                    "Open incentives beat closed labs.",
+                    "Decentralization is how progress survives.",
+                    "Markets for intelligence, not monopolies.",
+                    "The antidote to captured AI.",
+                    "A video commons for the internet.",
+                    "Let creativity compound.",
+                    "Intelligence grows faster when it's free.",
+                    "Open models. Open future.",
+                    "The camera belongs to everyone.",
+                  ]}
+                  className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl"
+                  interval={4000}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Footer Info Bar */}
