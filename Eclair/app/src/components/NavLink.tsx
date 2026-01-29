@@ -15,7 +15,7 @@ export function NavLink({ href, onClick, children, delay = 0 }: NavLinkProps) {
     return (
       <motion.button
         onClick={onClick}
-        className={className}
+        className={`${className} text-left`}
         variants={fadeIn}
         initial="hidden"
         animate="visible"
@@ -26,6 +26,8 @@ export function NavLink({ href, onClick, children, delay = 0 }: NavLinkProps) {
     );
   }
 
+  const isExternal = href?.startsWith('http');
+
   return (
     <motion.a
       href={href}
@@ -34,6 +36,7 @@ export function NavLink({ href, onClick, children, delay = 0 }: NavLinkProps) {
       initial="hidden"
       animate="visible"
       transition={{ delay }}
+      {...(isExternal && { target: "_blank", rel: "noopener noreferrer" })}
     >
       {children}
     </motion.a>

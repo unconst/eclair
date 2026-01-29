@@ -28,7 +28,7 @@ export function AnimatedHeadline({ phrases, className = '', interval = 4000 }: A
   const words = phrases[currentIndex].split(' ');
 
   return (
-    <div className={`text-eclair-text font-normal leading-[1.05] tracking-tight ${className}`}>
+    <div className={`text-eclair-text font-normal leading-[1.05] tracking-tight relative min-h-[3.5em] ${className}`}>
       <AnimatePresence mode="wait">
         <motion.h1
           key={currentIndex}
@@ -36,7 +36,7 @@ export function AnimatedHeadline({ phrases, className = '', interval = 4000 }: A
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
-          className="flex flex-wrap"
+          className="flex flex-wrap absolute top-0 left-0 right-0"
         >
           {words.map((word, index) => (
             <motion.span
