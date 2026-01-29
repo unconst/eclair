@@ -1,4 +1,10 @@
 <p align="center">
+  <a href="https://www.eclair.earth/">
+    <strong>https://www.eclair.earth/</strong>
+  </a>
+</p>
+
+<p align="center">
   <img src="eclair.png" alt="Eclair">
 </p>
 
