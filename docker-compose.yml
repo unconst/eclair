@@ -1,8 +1,8 @@
-# SigmaZero Subnet Docker Compose
+# Eclair Subnet Docker Compose
 services:
   validator:
     build: .
-    container_name: sigmazero-validator
+    container_name: eclair-validator
     restart: unless-stopped
     env_file:
       - .env

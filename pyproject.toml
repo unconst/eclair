@@ -1,11 +1,18 @@
 [project]
-name = "sigmazero"
+name = "eclair"
 version = "0.1.0"
-description = "Zero volatility portfolio allocation subnet"
+description = "Image-to-video generation subnet with GPT-4o evaluation"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "affinetes",
     "aiohttp",
     "bittensor>=8.0.0",
+    "minio",
+    "openai",
 ]
+
+[project.scripts]
+eclair = "eclair:main_sync"
+
+[tool.setuptools]
+py-modules = ["eclair"]

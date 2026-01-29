@@ -1,4 +1,4 @@
-# SigmaZero Subnet - Docker Build and Push
+# Eclair Subnet - Docker Build and Push
 #
 # This workflow builds and pushes the Docker image to Docker Hub
 # whenever code is pushed to the main branch.
@@ -21,7 +21,7 @@ on:
       - master
     # Only rebuild when relevant files change
     paths:
-      - 'validator.py'
+      - 'eclair.py'
       - 'pyproject.toml'
       - 'Dockerfile'
       - '.github/workflows/docker-publish.yml'
