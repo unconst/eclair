@@ -6,7 +6,11 @@ import { InfoBlock } from '@/components/InfoBlock';
 import { NavLink } from '@/components/NavLink';
 import { fadeIn } from '@/lib/animations';
 
-export function HeroSection() {
+interface HeroSectionProps {
+  onStudioClick: () => void;
+}
+
+export function HeroSection({ onStudioClick }: HeroSectionProps) {
   return (
     <section className="min-h-screen w-full bg-eclair-bg relative overflow-hidden">
       {/* Main Content Container */}
@@ -79,7 +83,7 @@ export function HeroSection() {
               transition={{ delay: 1.4 }}
             >
               <NavLink href="#features" delay={1.4}>Incentives</NavLink>
-              <NavLink href="#studio" delay={1.5}>Studio</NavLink>
+              <NavLink onClick={onStudioClick} delay={1.5}>Studio</NavLink>
               <NavLink href="#contact" delay={1.6}>Mining</NavLink>
             </motion.div>
           </div>
