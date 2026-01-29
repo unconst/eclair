@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { Upload, X, Download, Loader2, Play } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ImagePlus, X, Download, ArrowUp } from 'lucide-react';
 
 interface StudioInputProps {
   onClose: () => void;
@@ -18,24 +18,6 @@ export function StudioInput({ onClose }: StudioInputProps) {
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    const previewUrl = URL.createObjectURL(file);
-    setImagePreview(previewUrl);
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result as string;
-      setImage(base64);
-    };
-    reader.readAsDataURL(file);
-    setError(null);
-    setVideoUrl(null);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (!file || !file.type.startsWith('image/')) return;
 
     const previewUrl = URL.createObjectURL(file);
     setImagePreview(previewUrl);
@@ -102,117 +84,193 @@ export function StudioInput({ onClose }: StudioInputProps) {
     document.body.removeChild(link);
   };
 
+  const removeImage = () => {
+    setImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const canGenerate = image && prompt.trim() && !isGenerating;
+
   return (
     <motion.div
-      className="w-full"
+      className="w-full flex flex-col items-center justify-center min-h-[400px]"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.4 }}
     >
-      {/* Close button */}
+      {/* Close button - top right */}
       <button
         onClick={onClose}
-        className="absolute top-0 right-0 text-eclair-text hover:opacity-60 transition-opacity"
+        className="absolute top-0 right-0 text-eclair-text/60 hover:text-eclair-text transition-colors"
       >
-        <X size={24} />
+        <X size={20} />
       </button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-        {/* Left side - Image upload */}
-        <div
-          className={`relative border-2 border-dashed border-eclair-border/60 rounded-lg aspect-video flex items-center justify-center cursor-pointer transition-all hover:border-eclair-text/60 ${
-            imagePreview ? 'p-0' : 'p-6'
-          }`}
-          onClick={() => fileInputRef.current?.click()}
-          onDrop={handleDrop}
-          onDragOver={(e) => e.preventDefault()}
-        >
-          {imagePreview ? (
-            <img
-              src={imagePreview}
-              alt="Preview"
-              className="w-full h-full object-cover rounded-lg"
-            />
-          ) : (
-            <div className="text-center">
-              <Upload className="mx-auto mb-3 text-eclair-text/60" size={36} />
-              <p className="text-eclair-text/80 text-base">
-                Drop image or click
-              </p>
-            </div>
-          )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className="hidden"
-          />
-        </div>
-
-        {/* Right side - Video output or prompt */}
-        <div className="border-2 border-eclair-border/60 rounded-lg aspect-video flex items-center justify-center bg-black/10">
-          {videoUrl ? (
+      <AnimatePresence mode="wait">
+        {/* Video Result */}
+        {videoUrl ? (
+          <motion.div
+            key="video"
+            className="flex flex-col items-center gap-6 w-full max-w-2xl"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.3 }}
+          >
             <video
               src={videoUrl}
               controls
               autoPlay
               loop
-              className="w-full h-full object-contain rounded-lg"
+              className="w-full aspect-video rounded-xl shadow-2xl"
             />
-          ) : (
-            <div className="text-center text-eclair-text/40 p-6">
-              <Play size={36} className="mx-auto mb-3 opacity-40" />
-              <p className="text-sm">Video appears here</p>
+            <div className="flex gap-4">
+              <button
+                onClick={handleDownload}
+                className="flex items-center gap-2 px-6 py-2 text-eclair-text/80 hover:text-eclair-text transition-colors text-sm"
+              >
+                <Download size={18} />
+                Download
+              </button>
+              <button
+                onClick={() => setVideoUrl(null)}
+                className="flex items-center gap-2 px-6 py-2 text-eclair-text/80 hover:text-eclair-text transition-colors text-sm"
+              >
+                Create another
+              </button>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Prompt and controls */}
-      <div className="mt-6 flex flex-col sm:flex-row gap-4">
-        <input
-          type="text"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Describe how the image should animate..."
-          className="flex-1 bg-transparent border-2 border-eclair-border/60 rounded-lg px-4 py-3 text-eclair-text placeholder:text-eclair-text/40 focus:outline-none focus:border-eclair-text/60 text-lg"
-          onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-        />
-        
-        <button
-          onClick={handleGenerate}
-          disabled={isGenerating || !image || !prompt.trim()}
-          className="px-8 py-3 bg-eclair-text text-eclair-bg font-medium text-lg rounded-lg transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 whitespace-nowrap"
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="animate-spin" size={20} />
-              Generating...
-            </>
-          ) : (
-            <>
-              <Play size={20} />
-              Generate
-            </>
-          )}
-        </button>
-
-        {videoUrl && (
-          <button
-            onClick={handleDownload}
-            className="px-6 py-3 border-2 border-eclair-text text-eclair-text font-medium rounded-lg transition-all hover:bg-eclair-text hover:text-eclair-bg flex items-center justify-center gap-2"
+          </motion.div>
+        ) : isGenerating ? (
+          /* Loading State */
+          <motion.div
+            key="loading"
+            className="flex flex-col items-center gap-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
           >
-            <Download size={20} />
-          </button>
-        )}
-      </div>
+            {/* Progress Animation */}
+            <div className="relative w-24 h-24">
+              <svg className="w-full h-full animate-spin" viewBox="0 0 100 100">
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  className="text-eclair-border/30"
+                />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray="80 200"
+                  className="text-eclair-text"
+                />
+              </svg>
+            </div>
+            <p className="text-eclair-text/60 text-lg">Generating your video...</p>
+          </motion.div>
+        ) : (
+          /* Input State */
+          <motion.div
+            key="input"
+            className="flex flex-col items-center gap-6 w-full max-w-xl"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* Uploaded Image Preview */}
+            <AnimatePresence>
+              {imagePreview && (
+                <motion.div
+                  className="relative"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                >
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="max-w-xs max-h-48 rounded-lg object-cover shadow-lg"
+                  />
+                  <button
+                    onClick={removeImage}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-eclair-bg border border-eclair-border rounded-full flex items-center justify-center text-eclair-text/60 hover:text-eclair-text transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-      {/* Error message */}
-      {error && (
-        <p className="text-red-400 text-sm mt-3">{error}</p>
-      )}
+            {/* Chat Input Box */}
+            <div className="w-full relative">
+              <div className="flex items-center gap-3 bg-eclair-bg border border-eclair-border/60 rounded-2xl px-4 py-3 shadow-sm focus-within:border-eclair-text/40 transition-colors">
+                {/* Image Upload Icon */}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-eclair-text/50 hover:text-eclair-text transition-colors"
+                  title="Upload image"
+                >
+                  <ImagePlus size={22} />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+
+                {/* Text Input */}
+                <input
+                  type="text"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="Describe how it should move..."
+                  className="flex-1 bg-transparent text-eclair-text placeholder:text-eclair-text/40 focus:outline-none text-base"
+                  onKeyDown={(e) => e.key === 'Enter' && canGenerate && handleGenerate()}
+                />
+
+                {/* Generate Button */}
+                <button
+                  onClick={handleGenerate}
+                  disabled={!canGenerate}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                    canGenerate
+                      ? 'bg-eclair-text text-eclair-bg hover:opacity-80'
+                      : 'bg-eclair-border/30 text-eclair-text/30 cursor-not-allowed'
+                  }`}
+                >
+                  <ArrowUp size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Error message */}
+            {error && (
+              <p className="text-red-400 text-sm">{error}</p>
+            )}
+
+            {/* Helper text */}
+            <p className="text-eclair-text/40 text-xs">
+              Upload an image, describe the motion, and generate
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
