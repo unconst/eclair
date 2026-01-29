@@ -48,9 +48,9 @@ const heroPhrases = [
 
 export function HeroSection({ isStudioOpen, onStudioClick, onStudioClose }: HeroSectionProps) {
   return (
-    <section className="min-h-screen w-full bg-eclair-bg relative overflow-hidden">
+    <section className="h-screen w-full bg-eclair-bg relative overflow-hidden">
       {/* Main Content Container */}
-      <div className="w-full min-h-screen px-6 md:px-12 lg:px-16 pt-6 md:pt-8 lg:pt-10 pb-12 md:pb-16 lg:pb-20 flex flex-col">
+      <div className="w-full h-full px-6 md:px-12 lg:px-16 pt-4 md:pt-6 lg:pt-8 pb-8 md:pb-10 lg:pb-12 flex flex-col">
         
         {/* Header with Logo - Top left */}
         <div className="flex items-center justify-between">
@@ -75,12 +75,12 @@ export function HeroSection({ isStudioOpen, onStudioClick, onStudioClose }: Hero
         </div>
 
         {/* Staggered Logo - Centered at top */}
-        <div className="flex justify-center mt-2 md:mt-4">
+        <div className="flex justify-center mt-1 md:mt-2">
           <StaggeredLogo text="ECLAIR" />
         </div>
 
         {/* Hero Content - Left aligned */}
-        <div className="flex-1 flex flex-col justify-center mt-8 md:mt-16 lg:mt-24 max-w-5xl relative">
+        <div className="flex-1 flex flex-col justify-center mt-4 md:mt-8 lg:mt-12 max-w-5xl relative">
           <AnimatePresence>
             {!isStudioOpen && (
               <motion.div
@@ -113,10 +113,10 @@ export function HeroSection({ isStudioOpen, onStudioClick, onStudioClose }: Hero
         </div>
 
         {/* Footer Info Bar */}
-        <div className="mt-auto pt-12 md:pt-16 lg:pt-24">
+        <div className="mt-auto pt-6 md:pt-8 lg:pt-10">
           {/* Divider Line */}
           <motion.div
-            className="w-full h-px bg-eclair-border/40 mb-8 md:mb-10"
+            className="w-full h-px bg-eclair-border/40 mb-6 md:mb-8"
             initial={{ scaleX: 0, originX: 0 }}
             animate={{ scaleX: 1 }}
             transition={{ delay: 1.1, duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
@@ -158,7 +158,7 @@ export function HeroSection({ isStudioOpen, onStudioClick, onStudioClose }: Hero
       {/* Vertical Side Text - Right Side */}
       <div className="hidden lg:flex flex-col items-center gap-6 absolute right-8 top-1/2 -translate-y-1/2">
         <VerticalText text="NO. 0001-EV" delay={1.0} />
-        <VerticalText text="SCROLL TO EXPLORE" delay={1.1} />
+        <VerticalText text="MINE TO OWN" delay={1.1} />
       </div>
 
       {/* Far Right Edge Text */}
